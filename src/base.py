@@ -108,4 +108,73 @@ class BlogProcessor(ABC):
         d.mkdir(parents=True, exist_ok=True)
         return d
 
-    def manifest_path(self) ->
+    def manifest_path(self) -> Path:
+        return self.base_dir() / "manifest.json"
+
+    def load_manifest(self) -> dict:
+        if self.manifest_path().exists():
+            return json.loads(self.manifest_path().read_text())
+        return {}
+
+    def save_manifest(self, manifest: dict):
+        self.manifest_path().write_text(json.dumps(manifest, indent=2))
+
+    def process_all(self):
+        manifest = self.load_manifest()
+        md_dir = self.md_dir()
+
+        print(f"[{self.name}] Processing {len(manifest)} cached essays to markdown...")
+
+        for slug, meta in manifest.items():
+            html_path = self.cache_dir() / f"{slug}.html"
+            if not html_path.exists():
+                continue
+
+            # 読み込み時も明示的に utf-8 を指定
+            html = html_path.read_text(encoding="utf-8")
+            md = self.extract_markdown(html)
+
+            md_path = md_dir / f"{slug}.md"
+            md_path.write_text(md, encoding="utf-8")
+
+        print(f"[{self.name}] Done. Markdown files saved to {md_dir}")
+
+
+# --------------------------------------------------------------------------- #
+# Score                                                                       #
+# --------------------------------------------------------------------------- #
+
+
+class BlogScorer(ABC):
+    """Base class for scoring and ranking essays."""
+
+    name: str
+
+    @abstractmethod
+    def get_recommended_slugs(self) -> set[str]:
+        """Return a set of recommended essay slugs."""
+        ...
+
+    @abstractmethod
+    def get_base_url(self) -> str:
+        """Return the base URL of the blog."""
+        ...
+
+
+# --------------------------------------------------------------------------- #
+# Helpers                                                                     #
+# --------------------------------------------------------------------------- #
+
+
+def load_blog(name: str):
+    """Dynamically load a blog module by name."""
+    try:
+        return importlib.import_module(f"blogs.{name}")
+    except ModuleNotFoundError:
+        raise ValueError(f"Blog '{name}' not found in src/blogs/")
+
+
+def list_blogs() -> list[str]:
+    """List all available blogs in the src/blogs/ directory."""
+    blogs_dir = Path(__file__).parent / "blogs"
+    return [p.stem for p in blogs_dir.glob("*.py") if not p.name.startswith("_")]
