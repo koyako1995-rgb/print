@@ -96,7 +96,7 @@ class BlogSource(ABC):
                 print(f"    SKIP (error: {e})")
                 continue
 
-            (self.cache_dir() / f"{slug}.html").write_text(r.text)
+            (self.cache_dir() / f"{slug}.html").write_text(r.text, encoding="utf-8")
             manifest[slug] = {"title": essay["title"], "url": essay["url"]}
             self.save_manifest(manifest)
             time.sleep(delay)
