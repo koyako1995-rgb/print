@@ -10,7 +10,7 @@ class Source(BlogSource):
         posts = []
         response = requests.get("http://blog.tatsuru.com/")
         # 文字化け対策
-        response.encoding = response.encoding = "euc-jp" 
+        response.encoding = "euc-jp" 
         soup = BeautifulSoup(response.content, "html.parser")
 
         for a_tag in soup.find_all("a", href=True):
