@@ -7,20 +7,19 @@ class Source(BlogSource):
 
     def get_essay_urls(self) -> list[dict]:
         posts = []
-        # 目次ページURL
-        url = "https://1000ya.isis.ne.jp/souran/index.php?vol=102"
+        # 【ここを修正】1夜からすべての目次が載っている完全版URL（vol=100）に変更します
+        url = "https://1000ya.isis.ne.jp/souran/index.php?vol=100"
         
         response = requests.get(url)
         response.encoding = "utf-8" 
         soup = BeautifulSoup(response.content, "html.parser")
         
-        # 目次からすべての記事リンクをスキャン
+        # 目次からすべての記事リンク（第1夜〜最新夜まで）をスキャン
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
             if "1000ya.isis.ne.jp/" in href and href.endswith(".html"):
                 title = a_tag.get_text(strip=True)
                 if title and not title.isdigit() and "千夜千冊" not in title:
-                    # スコア判定の基準として「タイトルの長さ（本の情報が詳しく書かれているか）」を一時的に持たせます
                     posts.append({
                         "title": title,
                         "url": href,
@@ -28,10 +27,10 @@ class Source(BlogSource):
                     })
         
         # 【自動選別アルゴリズム】
-        # タイトルがしっかり書き込まれており、情報量が多そうな記事（上位30件）を優先してソート
+        # 全1800マイル以上の記事から、タイトルが詳しく、情報量が多そうな記事を優先してソート
         posts.sort(key=lambda x: x["title_len"], reverse=True)
         
-        # 上位30件だけを厳選抽出
+        # 全体の中から本当のトップ30件だけを厳選抽出
         top_posts = []
         for p in posts[:30]:
             top_posts.append({
@@ -39,7 +38,7 @@ class Source(BlogSource):
                 "url": p["url"]
             })
         
-        print(f"[事前選別] 全記事の中から、読み応え（情報量）の期待値が高い「トップ {len(top_posts)} 件」を自動抽出し、ダウンロード対象に指定しました。")
+        print(f"[事前選別] 第1夜からすべての記事を対象に判定し、最も読み応えの期待値が高い「真のトップ {len(top_posts)} 件」を自動抽出しました。")
         return top_posts
 
 class Processor(BlogProcessor):
@@ -54,7 +53,6 @@ class Scorer(BlogScorer):
     name = "1000ya"
 
     def get_recommended_slugs(self) -> set[str]:
-        # 最初から30個に絞り込まれて保存されているため、フォルダ内のものをすべて対象にします
         html_dir = "data/1000ya/html"
         import os
         if not os.path.exists(html_dir):
