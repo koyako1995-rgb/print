@@ -7,46 +7,51 @@ class Source(BlogSource):
 
     def get_essay_urls(self) -> list[dict]:
         posts = []
-        # 全1800夜以上が網羅されているインデックスページ
+        # 全1800夜以上が1ページに網羅されている目次URL
         url = "https://1000ya.isis.ne.jp/souran/index.php?vol=100"
         
         response = requests.get(url)
         response.encoding = "utf-8" 
         soup = BeautifulSoup(response.content, "html.parser")
         
-        # vol=100のページ構造（aタグのhref属性）に最適化したスキャン
+        # ページ内のすべてのリンクをチェック
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
+            title = a_tag.get_text(strip=True)
             
-            # 各「夜」の記事リンクのパターン（相対パスや絶対パスの揺らぎに対応）
-            if "1000ya.isis.ne.jp/" in href or href.startswith("/") or href.endswith(".html"):
-                title = a_tag.get_text(strip=True)
-                
-                # 不要なナビゲーションや数字だけのリンクを除外
-                if title and not title.isdigit() and "千夜千冊" not in title and len(title) > 2:
-                    # 正しいURLの形に整形
+            # 末尾が「.html」で終わるリンク、または数字が含まれる記事リンクを広く拾う
+            if href.endswith(".html") or "1000ya.isis.ne.jp" in href:
+                # ナビゲーション用の不要な文字列や数字だけのリンクを完全に除外
+                if title and not title.isdigit() and "千夜千冊" not in title and len(title) > 3:
+                    
+                    # URLの形式を正しい絶対パスに整形する
                     full_url = href
                     if not href.startswith("http"):
-                        if href.startswith("/"):
-                            full_url = f"https://1000ya.isis.ne.jp{href}"
+                        # 相対パスの揺らぎをすべて吸収します
+                        clean_href = href.lstrip("./").lstrip("/")
+                        if "souran" in clean_href:
+                            full_url = f"https://1000ya.isis.ne.jp/{clean_href}"
                         else:
-                            full_url = f"https://1000ya.isis.ne.jp/souran/{href}"
+                            full_url = f"https://1000ya.isis.ne.jp/souran/{clean_href}"
                             
                     posts.append({
                         "title": title,
                         "url": full_url,
-                        "title_len": len(title)
+                        "title_len": len(title)  # タイトルの文字数を「情報の濃さ」のスコアにする
                     })
         
-        # 重複するリンクを綺麗に排除
-        unique_posts = {p["url"]: p for p in posts}.values()
-        posts = list(unique_posts)
-
-        # 【自動選別アルゴリズム】 タイトルの文字数が長い（情報が最も詰まっている）順にソート
-        posts.sort(key=lambda x: x["title_len"], reverse=True)
+        # 重複して拾ってしまったリンクを綺麗に1本化
+        unique_posts = {}
+        for p in posts:
+            unique_posts[p["url"]] = p
         
-        # 上位30件を厳選
-        top_posts = posts[:30]
+        valid_posts = list(unique_posts.values())
+
+        # 【自動選別アルゴリズム】タイトルの文字数が長い（本の情報が最も濃い）順に並び替え
+        valid_posts.sort(key=lambda x: x["title_len"], reverse=True)
+        
+        # 全歴史の中から、上位30件だけを厳選
+        top_posts = valid_posts[:30]
         
         print(f"[事前選別] 全歴史から読み応え（情報量）の期待値が高い「真のトップ {len(top_posts)} 件」を自動抽出しました。")
         return [{"title": p["title"], "url": p["url"]} for p in top_posts]
@@ -56,7 +61,7 @@ class Processor(BlogProcessor):
 
     def extract_markdown(self, html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
-        # 千夜千冊の本編テキストが格納されている一般的なエリアを広くカバー
+        # 本文エリアを広く抽出
         content = soup.find("div", class_="main-content") or soup.find("div", id="main") or soup.find("body")
         return content.get_text() if content else ""
 
