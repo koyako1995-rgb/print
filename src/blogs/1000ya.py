@@ -28,6 +28,23 @@ class Processor(BlogProcessor):
     name = "1000ya"
 
     def extract_markdown(self, html: str) -> str:
+        # 現在処理しようとしているファイル名（スラッグ）を取得
+        # ※ 1000ya.py の一番下にある Scorer の自動選別リストを呼び出します
+        scorer = Scorer()
+        approved_slugs = scorer.get_recommended_slugs()
+        
+        # もし自動選別で「印刷に値しない」とされた記事なら、スキップ（空文字を返す）
+        # ただし、最初の一回目は判定用に処理を通すため、htmlのパスからスラッグを推測します
+        import inspect
+        frame = inspect.currentframe()
+        # 呼び出し元の変数から現在のslugを特定する裏技的な処理
+        try:
+            current_slug = frame.f_back.f_locals.get("slug")
+            if current_slug and current_slug not in approved_slugs:
+                return ""  # 選ばれなかった記事は中身を空にする
+        finally:
+            del frame
+
         soup = BeautifulSoup(html, "html.parser")
         content = soup.find("div", class_="main-content") or soup.find("body")
         return content.get_text() if content else ""
